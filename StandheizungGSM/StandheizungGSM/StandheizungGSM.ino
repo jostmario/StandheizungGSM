@@ -8,7 +8,7 @@
 #define GpsNeo6_Serial Serial2
 
 static const uint32_t SerialBaud = 115200;              // Baudrate für PC Serial Baud
-static const uint32_t SerialBaudGSM = 9600;             // Baudrate Sim900 Modul
+static const uint32_t SerialBaudGSM = 19200;             // Baudrate Sim900 Modul
 static const uint32_t SerialBaudGPS = 9600;
 bool simm900_isINIT = false;
 bool Neo6mGPS_isInit = false;
