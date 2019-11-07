@@ -5,6 +5,9 @@
  https://www.geeetech.com/wiki/index.php/Arduino_GPRS_Shield
 */
 
+#include <TinyGPS++.h>
+TinyGPSPlus gps;
+
 #define Sim900_Serial Serial2
 #define GpsNeo6_Serial Serial3
 
@@ -33,6 +36,7 @@ void setup()
 	sim900_PowerOn();    // Erst im Endprodukt Funktionsfähig
 	Serial.begin(SerialBaud);
 	Sim900_Serial.begin(SerialBaudGSM);
+	GpsNeo6_Serial.begin(SerialBaudGSM);
 	// AT an SIm900 Modul um Autobaudrate einzustellen
 	Serial.println("+++ sende AT fuer Autobaud +++");
 	while (Sim900_Serial.read() >= 0);  // Empfangsbuffer leeren
@@ -63,16 +67,30 @@ void loop()
 
 
 
-	if (Sim900_Serial.available())
+	 if (Sim900_Serial.available())
 		Serial.write(Sim900_Serial.read());
-	if (Serial.available())
-		Sim900_Serial.write(Serial.read());
+	 if (Serial.available())
+ 		Sim900_Serial.write(Serial.read());
+
+
+	// if (GpsNeo6_Serial.available())
+ 		//  Serial.println(GpsNeo6_Serial.read());
+
+	
+
+
+	
+	
+
+	 
 
 
 
 
+	//if (Serial.available())
+ 		// GpsNeo6_Serial.write(Serial.read());
 
-
+	 	 
 }
 
 
