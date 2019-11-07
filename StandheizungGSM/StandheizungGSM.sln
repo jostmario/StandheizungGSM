@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "StandheizungGSM", "Standhei
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gps", "\\horgen.local\Services\PrivaterOrdner\jost\Eigene Dateien\Arduino\gps\gps.vcxproj", "{25B7301A-9A67-4E3D-BEB5-C67CA063B4B9}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gpslatitude", "\\horgen.local\Services\PrivaterOrdner\jost\Eigene Dateien\Arduino\gpslatitude\gpslatitude.vcxproj", "{5A980FD4-C35F-4097-B82E-035AEDC8A430}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -21,6 +23,10 @@ Global
 		{25B7301A-9A67-4E3D-BEB5-C67CA063B4B9}.Debug|x86.Build.0 = Debug|Win32
 		{25B7301A-9A67-4E3D-BEB5-C67CA063B4B9}.Release|x86.ActiveCfg = Release|Win32
 		{25B7301A-9A67-4E3D-BEB5-C67CA063B4B9}.Release|x86.Build.0 = Release|Win32
+		{5A980FD4-C35F-4097-B82E-035AEDC8A430}.Debug|x86.ActiveCfg = Debug|Win32
+		{5A980FD4-C35F-4097-B82E-035AEDC8A430}.Debug|x86.Build.0 = Debug|Win32
+		{5A980FD4-C35F-4097-B82E-035AEDC8A430}.Release|x86.ActiveCfg = Release|Win32
+		{5A980FD4-C35F-4097-B82E-035AEDC8A430}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
