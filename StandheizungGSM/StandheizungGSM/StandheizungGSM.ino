@@ -19,10 +19,10 @@ bool Neo6mGPS_isInit = false;
 bool started = false;
 
 // Pinbelegungen
-const int Relay = 10;                   // Pin für Relays Standheizung an
+const int Relay = 10;                   // Pin für Rellays Standheizung an
 const int switchs = 7;                  // Pin für Stanheizung Starttaster
 const int esppin = 6;                   // Heizung Start
-const int EspPinRueck = 5;              // Rückmeldung an ESP
+const int EspPinRueck = 5;              // Rückmeldung an ESPe
 const int HeizungLed = 8;               // Led Standheizung Aktiv
 const int sim900PowerPin = 7;            // Pin zum Einschalten des Sim900 Moduls
 String serialInputBuffer;
@@ -32,50 +32,44 @@ void InitSim900();
 void sim900_PowerOn();
 
 // the setup function runs once when you press reset or power the boardd
-void setup() 
+void setup()
 {
 
 	// sim900_PowerOn();    // Erst im Endprodukt Funktionsfähig
 	Serial.begin(SerialBaud);
 	Sim900_Serial.begin(SerialBaudGSM);
-    // psNeo6_Serial.begin(SerialBaudGSM);
-    // AT an SIm900 Modul um Autobaudrate einzustellen
+	// psNeo6_Serial.begin(SerialBaudGSM);
+	// AT an SIm900 Modul um Autobaudrate einzustellen
 	Serial.println("+++ sende AT fuer Autobaud +++");
 	while (Sim900_Serial.read() >= 0);  // Empfangsbuffer leeren
 	Sim900_Serial.println("AT");
-	delay(500);    // ab 60ms kommt die Antwort
-	Serial.println(SerialAbfrage());
-	while (Sim900_Serial.available())
-	 {
+	while (Sim900_Serial.read() >= 0);  // Empfangsbuffer leeren
+	delay(800);    // ab 60ms kommt die Antwort
+
+	if (Sim900_Serial.available())
+	{
+		// Lese alles bis zum Zeichen \n
 		serialInputBuffer = Sim900_Serial.readStringUntil('\n');
-		delay(100);
-		Serial.println(serialInputBuffer);
-		delay(1000);
-		
-		Serial.println(serialInputBuffer);
-		delay(1000);
-		Serial.println(serialInputBuffer);
-		delay(1000);
-						//		if (serialInputBuffer == "AT'\n'")
-							//	{
+		delay(10);
+		  if (serialInputBuffer != "OK")
+		  {
+				Serial.println(serialInputBuffer);
+				Serial.println(serialInputBuffer);
+				Serial.println(serialInputBuffer);
+				Serial.println(serialInputBuffer);
+				Serial.println(serialInputBuffer);
+				Serial.println(serialInputBuffer);
+				Serial.println(serialInputBuffer);
+				Serial.println(serialInputBuffer);
 
-						//			Serial.println("binhier");
-							//		Serial.println(serialInputBuffer);
-						//			Serial.println(serialInputBuffer);
-
-						//	}
 		
-						//Serial.write(Sim900_Serial.read());
-						//if ((Sim900_Serial.read()) eq "AT")
-						//{
-						//		Serial.println("AT Antwort Kam an...");
-		
+				Serial.println(SerialAbfrage());
+    	 }
+		delay(300);
+		Serial.println("wait for GSM init.......");
 	}
-	delay(300);
-	Serial.println("wait for GSM init.......");
+
 }
-
-
 
 // the loop function runs over and over again until power down or reset
 void loop() 
