@@ -11,7 +11,7 @@ TinyGPSPlus gps;
 #define Sim900_Serial Serial2
 #define GpsNeo6_Serial Serial3
 
-static const uint32_t SerialBaud = 115200;              // Baudrrffrfate für PC Serial Baud
+static const uint32_t SerialBaud = 115200;              // Baudrate Seraiel  für PC Serial Baud
 static const uint32_t SerialBaudGSM = 19200;             // Baudrate Sim900 Modul
 static const uint32_t SerialBaudGPS = 9600;
 bool simm900_isINIT = false;
