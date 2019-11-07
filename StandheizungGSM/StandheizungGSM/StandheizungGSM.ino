@@ -2,16 +2,18 @@
  Name:		StandheizungGSM.ino
  Created:	06.11.2019 06:33:29
  Author:	jost Mario
+ https://www.geeetech.com/wiki/index.php/Arduino_GPRS_Shield
 */
 
-#define Sim900_Serial Serial1
-#define GpsNeo6_Serial Serial2
+#define Sim900_Serial Serial2
+#define GpsNeo6_Serial Serial3
 
 static const uint32_t SerialBaud = 115200;              // Baudrate für PC Serial Baud
 static const uint32_t SerialBaudGSM = 19200;             // Baudrate Sim900 Modul
 static const uint32_t SerialBaudGPS = 9600;
 bool simm900_isINIT = false;
 bool Neo6mGPS_isInit = false;
+bool started = false;
 
 // Pinbelegungen
 const int Relay = 10;                   // Pin für Relays Standheizung an
@@ -19,19 +21,18 @@ const int switchs = 7;                  // Pin für Stanheizung Starttaster
 const int esppin = 6;                   // Heizung Start
 const int EspPinRueck = 5;              // Rückmeldung an ESP
 const int HeizungLed = 8;               // Led Standheizung Aktiv
+const int sim900PowerPin = 7;            // Pin zum Einschalten des Sim900 Moduls
 
 
 void InitSim900();
+void sim900_PowerOn();
 
 // the setup function runs once when you press reset or power the boardd
 void setup() 
 {
+	sim900_PowerOn();    // Erst im Endprodukt Funktionsfähig
 	Serial.begin(SerialBaud);
 	Sim900_Serial.begin(SerialBaudGSM);
-    GpsNeo6_Serial.begin(SerialBaudGPS);
-	Serial.println("booting.....");
-	// Sim Modul 10 Sec Zeit geben
-	delay(15000);
 	// AT an SIm900 Modul um Autobaudrate einzustellen
 	Serial.println("+++ sende AT fuer Autobaud +++");
 	while (Sim900_Serial.read() >= 0);  // Empfangsbuffer leeren
@@ -59,6 +60,8 @@ void loop()
 		InitSim900();
 		// InitGPSModul();
 	}
+
+
 
 	if (Sim900_Serial.available())
 		Serial.write(Sim900_Serial.read());
@@ -128,14 +131,14 @@ void InitSim900()
 	}
 
 
-	Serial.println("set SMS mode to text");
+	Serial.println("+++ set SMS mode to text +++");
 	Sim900_Serial.println("AT+CMGF=1"); // set SMS mode to text
 	delay(240);
 	while (Sim900_Serial.available())
 	{
 		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
 	}
-	Serial.println("sms speicher leeren");
+	Serial.println("+++ sms speicher leeren +++");
 	Sim900_Serial.println("AT+CMGD=1,4"); // delete all SMS
 	Serial.println("+++ sms speicher leer +++");
 	delay(240);
@@ -148,4 +151,20 @@ void InitSim900()
 	
 
 	simm900_isINIT = true;
+}
+
+
+
+
+void sim900_PowerOn()
+{
+	Serial.println("+++ Sim900 Power On..... +++");
+	// Einschaltprozedur für Sim900 Modul
+	pinMode(sim900PowerPin, OUTPUT);
+	digitalWrite(sim900PowerPin, LOW);
+	delay(1000);
+	digitalWrite(sim900PowerPin, HIGH);
+	delay(2000);
+	digitalWrite(sim900PowerPin, LOW);
+	delay(3000);                          // Wareten bis Modul Hochgefahren
 }
