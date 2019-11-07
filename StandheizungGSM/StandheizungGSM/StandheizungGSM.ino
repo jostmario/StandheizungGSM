@@ -25,6 +25,7 @@ const int esppin = 6;                   // Heizung Start
 const int EspPinRueck = 5;              // Rückmeldung an ESP
 const int HeizungLed = 8;               // Led Standheizung Aktiv
 const int sim900PowerPin = 7;            // Pin zum Einschalten des Sim900 Moduls
+String serialInputBuffer;
 
 
 void InitSim900();
@@ -33,18 +34,42 @@ void sim900_PowerOn();
 // the setup function runs once when you press reset or power the boardd
 void setup() 
 {
-	sim900_PowerOn();    // Erst im Endprodukt Funktionsfähig
+
+	// sim900_PowerOn();    // Erst im Endprodukt Funktionsfähig
 	Serial.begin(SerialBaud);
 	Sim900_Serial.begin(SerialBaudGSM);
-	GpsNeo6_Serial.begin(SerialBaudGSM);
-	// AT an SIm900 Modul um Autobaudrate einzustellen
+    // psNeo6_Serial.begin(SerialBaudGSM);
+    // AT an SIm900 Modul um Autobaudrate einzustellen
 	Serial.println("+++ sende AT fuer Autobaud +++");
 	while (Sim900_Serial.read() >= 0);  // Empfangsbuffer leeren
 	Sim900_Serial.println("AT");
-	delay(300);
+	delay(500);    // ab 60ms kommt die Antwort
+	Serial.println(SerialAbfrage());
 	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());    //Forward what Software Serial received to Serial Port
+	 {
+		serialInputBuffer = Sim900_Serial.readStringUntil('\n');
+		delay(100);
+		Serial.println(serialInputBuffer);
+		delay(1000);
+		
+		Serial.println(serialInputBuffer);
+		delay(1000);
+		Serial.println(serialInputBuffer);
+		delay(1000);
+						//		if (serialInputBuffer == "AT'\n'")
+							//	{
+
+						//			Serial.println("binhier");
+							//		Serial.println(serialInputBuffer);
+						//			Serial.println(serialInputBuffer);
+
+						//	}
+		
+						//Serial.write(Sim900_Serial.read());
+						//if ((Sim900_Serial.read()) eq "AT")
+						//{
+						//		Serial.println("AT Antwort Kam an...");
+		
 	}
 	delay(300);
 	Serial.println("wait for GSM init.......");
@@ -56,41 +81,28 @@ void setup()
 void loop() 
 {
 	
-	// 10000 ms warten bis Modul eingebucht hat dann Initialisieren.
-	if ((millis() > 10000) && (simm900_isINIT == false))
-	{
-		Serial.println("loop");
-		Serial.println(millis());
-		InitSim900();
-		// InitGPSModul();
-	}
+			// 10000 ms warten bis Modul eingebucht hat dann Initialisieren.
+			if ((millis() > 10000) && (simm900_isINIT == false))
+			{
+				simm900_isINIT == true;
+				Serial.println("+++ begin sim900 initialisierung +++");
+				InitSim900();
+				// InitGPSModul();
+			}
+			
+
+			 if (Sim900_Serial.available())                     // Sendet Daten bei z.b. Anruf oder SMS
+				Serial.write(Sim900_Serial.read());
+			 if (Serial.available())
+ 				 Sim900_Serial.write(Serial.read());
 
 
-
-	 if (Sim900_Serial.available())
-		Serial.write(Sim900_Serial.read());
-	 if (Serial.available())
- 		Sim900_Serial.write(Serial.read());
-
-
-	// if (GpsNeo6_Serial.available())
- 		//  Serial.println(GpsNeo6_Serial.read());
-
-	
-
+				//	   if (GpsNeo6_Serial.available())              // GPS Sensor sendet Daten im Secundentakt raus
+				//   Serial.println(GpsNeo6_Serial.read());
 
 	
-	
-
-	 
-
-
-
-
-	//if (Serial.available())
- 		// GpsNeo6_Serial.write(Serial.read());
-
-	 	 
+				//if (Serial.available())
+				// GpsNeo6_Serial.write(Serial.read());
 }
 
 
@@ -101,73 +113,41 @@ void loop()
 void InitSim900()
 {
 	simm900_isINIT = false;
-	Serial.println("+++ begin sim900 initialisierung +++");
-	delay(3000);
-	
-	
+			
+	// Serial.println("+++ begin sim900 initialisierung +++");
+	delay(20);
+	Serial.println("+++ Sende AT +++");
 	Sim900_Serial.println("AT");
-	delay(200);
-	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
-	}
+	delay(900);
+	SerialAbfrage();
 	Serial.println("+++ Signal Qualitaet +++ abfragen");
 	Sim900_Serial.println("AT+CSQ"); //Signal quality test, value range is 0-31 , 31 is the best
-	delay(240);
-	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
-	}
-
+	delay(740);
+	SerialAbfrage();
+	Serial.println("+++ Sim Karte abfragen +++");
 	Sim900_Serial.println("AT+CCID"); //Read SIM information to confirm whether the SIM is plugged
-	delay(240);
-	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
-	}
-
-
+	delay(940);
+	SerialAbfrage();
+	Serial.println("+++ Check Network +++");
 	Sim900_Serial.println("AT+CREG?"); //Check whether it has registered in the network
-	delay(240);
-	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
-	}
-
+	delay(940);
+	SerialAbfrage();
+	Serial.println("+++ set CLIP +++");
 	Sim900_Serial.println("AT+CLIP=1"); //rufnummer anzeige aktivieren CLIP
-	delay(240);
-	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
-	}
-
+	delay(940);
+	SerialAbfrage();
 	Sim900_Serial.println("AT+CNMI=2,2,0,0,0");
-	delay(240);
-	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
-	}
-
-
+	delay(940);
+	SerialAbfrage();
 	Serial.println("+++ set SMS mode to text +++");
 	Sim900_Serial.println("AT+CMGF=1"); // set SMS mode to text
-	delay(240);
-	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
-	}
+	delay(940);
+	SerialAbfrage();
 	Serial.println("+++ sms speicher leeren +++");
 	Sim900_Serial.println("AT+CMGD=1,4"); // delete all SMS
-	Serial.println("+++ sms speicher leer +++");
-	delay(240);
-	while (Sim900_Serial.available())
-	{
-		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
-	}
-
-	Serial.println("+++ sim900 initialisiert +++");
-	
-
+	delay(940);
+	SerialAbfrage();
+	Serial.println("+++ sim900 fertig initialisiert +++");
 	simm900_isINIT = true;
 }
 
@@ -186,3 +166,16 @@ void sim900_PowerOn()
 	digitalWrite(sim900PowerPin, LOW);
 	delay(3000);                          // Wareten bis Modul Hochgefahren
 }
+
+
+
+
+String SerialAbfrage()
+{
+
+while (Sim900_Serial.available())                     // Sendet Daten bei z.b. Anruf oder SMS
+Serial.write(Sim900_Serial.read());
+return Sim900_Serial.readString();
+
+}
+
