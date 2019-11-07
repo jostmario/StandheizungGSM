@@ -47,7 +47,7 @@ void setup()
 		Serial.write(Sim900_Serial.read());    //Forward what Software Serial received to Serial Port
 	}
 	delay(300);
-	Serial.println("wait for GSM init......");
+	Serial.println("wait for GSM init.......");
 }
 
 
