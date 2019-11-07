@@ -17,6 +17,20 @@ static const uint32_t SerialBaudGPS = 9600;
 bool simm900_isINIT = false;
 bool Neo6mGPS_isInit = false;
 bool started = false;
+unsigned long startTime;
+unsigned long shutdownTime;
+bool RelayOn;
+String serialInputBufferGSM;
+const unsigned long DEFAULTTIME = 15000;                // Standart Laufzeit der Standheizung 30 Min 1800000ms
+const bool EIN = true;
+const bool AUS = false;
+int val = 0;
+int HeizLedState = LOW;
+unsigned long previousMillis = 0;                      // LED Blink will store last time LED was updated
+const long interval = 200;                             // LED Blink interval at which to blink Heizungs Led (milliseconds)
+unsigned long currentMilliss = millis();               // LED Blink
+
+
 
 // Pinbelegungen
 const int Relay = 10;                   // Pin für Rellays Standheizung an         
@@ -24,8 +38,8 @@ const int switchs = 7;                  // Pin für Stanheizung Starttaster
 const int esppin = 6;                   // Heizung Start
 const int EspPinRueck = 5;              // Rückmeldung an ESPe
 const int HeizungLed = 8;               // Led Standheizung Aktiv
-const int sim900PowerPin = 7;            // Pin zum Einschalten des Sim900 Moduls
-String serialInputBuffer;
+const int sim900PowerPin = 6;            // Pin zum Einschalten des Sim900 Moduls
+               
 
 
 void InitSim900();
@@ -34,6 +48,13 @@ void sim900_PowerOn();
 // the setup function runs once when you press reset or power the boardd
 void setup()
 {
+	pinMode(switchs, INPUT);            // Taster als Input
+	digitalWrite(switchs, HIGH);        // Intern Pullup setzen
+	pinMode(HeizungLed, OUTPUT);      // Status LED Standheizung
+	pinMode(Relay, OUTPUT);           // Relays als Output
+	digitalWrite(Relay, LOW);         // Relays aus setzen
+
+
 	//Init der Debug serial.
 	Serial.begin(SerialBaud);
 
@@ -52,18 +73,18 @@ void setup()
 	if (Sim900_Serial.available())
 	{
 		// Lese alles bis zum Zeichen \n
-		serialInputBuffer = "";
-		serialInputBuffer = Sim900_Serial.readStringUntil('\n');
-		Serial.println("Eingangspuffer: " + serialInputBuffer.substring(0, 2));
+		serialInputBufferGSM = "";
+		serialInputBufferGSM = Sim900_Serial.readStringUntil('\n');
+		// Serial.println("Eingangspuffer: " + serialInputBufferGSM.substring(0, 2));
 
-		if (serialInputBuffer.substring(0, 2) == "AT")
+		if (serialInputBufferGSM.substring(0, 2) == "AT")
 		{
-			Serial.println("GSM 900 already on");
-
+			Serial.println("GSM 900 bereits an");
+			Serial.println("Wait for GSM init.......");
 		}
 		else
 		{
-			Serial.println("Error: " + serialInputBuffer);
+			Serial.println("Fehler: " + serialInputBufferGSM);
 		}
 	}
 	else
@@ -72,7 +93,7 @@ void setup()
 		sim900_PowerOn();
 		Serial.println("Wait for GSM init.......");
 		delay(5000);
-		
+
 	}
 
 }
@@ -90,11 +111,47 @@ void loop()
 	}
 			
 
+
+	// ++++++++++++++ Per Taster standheizung einschalten Start++++++++++++++++++++++++++
+	val = digitalRead(switchs);   // read the input pin
+  // Serial.println(val);
+	if (val == 0)
+	{
+		if (not RelayOn)
+		{
+			Serial.println("+++ Aktiviert durch Taster +++")
+			HeizLedState = HIGH;
+			HeizungEin(EIN, DEFAULTTIME);
+		}
+
+	}
+	// ++++++++++++++ Per Taster standheizung einschalten Ende++++++++++++++++++++++++++
+
+
 	if (Sim900_Serial.available())
 	{
 		// Sendet Daten bei z.b. Anruf oder SMS
+		// Serial.write(Sim900_Serial.read());
 		Serial.write(Sim900_Serial.read());
+		serialInputBufferGSM = Sim900_Serial.readStringUntil('\n');
+		delay(10);
+		Serial.println(serialInputBufferGSM);
+
+		//Serial.println(test);                      /0,21
+		Serial.println(serialInputBufferGSM.substring(8,14));
+
+		//  ################################### Anruf ############################
+		// Ein Anruf kommt rein mit der nummer 491622742063
+		// if (serialInputBufferGSM.substring(8, 12) == "CLIP:\"+491622742063\"")
+			if (serialInputBufferGSM.substring(8, 14) == "491622")
+		{
+			Serial.println(serialInputBufferGSM.substring(8, 14));
+			Serial.println("Heizung Einschalten");
+
+			HeizungEin(EIN, DEFAULTTIME);
+		}
 	}
+
 
 	
 	if (Serial.available())
@@ -103,16 +160,56 @@ void loop()
 	}
 
 
+	// Relays nach 30 min Abschalten
+	if (RelayOn)
+	{
+		if (startTime + shutdownTime < millis())
+		{
+			HeizungEin(AUS, 0);
+			digitalWrite(EspPinRueck, LOW);   // Heizung an an ESP8622 melden
+		}
+	}
+
+
+	// ####################  Blinkende LED für Standheizung Aktiv ###############################
+  // check to see if it's time to blink the LED; that is, if the difference
+  // between the current time and last time you blinked the LED is bigger than
+  // the interval at which you want to blink the LED.
+	unsigned long currentMillis = millis();
+	if (currentMillis - previousMillis >= interval)
+	{
+		previousMillis = currentMillis;                                 // save the last time you blinked the LED
+
+		if (RelayOn) {
+			if (HeizLedState == LOW)
+			{
+				HeizLedState = HIGH;
+				// Serial.println("test Heizung An"); 
+			}
+			else
+			{
+				HeizLedState = LOW;
+				// Serial.println("Led Heizung Aus");
+			}
+			digitalWrite(HeizungLed, HeizLedState);                              // set the LED with the ledState of the variable:
+		}
+		else digitalWrite(HeizungLed, LOW);
+	}
+
+
+
+
+
 	// if (GpsNeo6_Serial.available())              // GPS Sensor sendet Daten im Secundentakt raus
 	// Serial.println(GpsNeo6_Serial.read());
 
 
 
 	//delay(300);
-	while (GpsNeo6_Serial.available() > 0)
+	/*while (GpsNeo6_Serial.available() > 0)
 	{
 		gps.encode(GpsNeo6_Serial.read());
-	}
+	}*/
 
 	//smartDelay(200);
 
@@ -122,8 +219,8 @@ void loop()
 	//Serial.println(gps.date.month()); // Month (1-12) (u8)
 	//Serial.println(gps.date.day()); // Day (1-31) (u8)
 	//Serial.println(gps.time.value()); // Raw time in HHMMSSCC format (u32)
-	Serial.println(gps.time.hour()); // Hour (0-23) (u8)
-	Serial.println(gps.time.minute()); // Minute (0-59) (u8)
+	// Serial.println(gps.time.hour()); // Hour (0-23) (u8)
+	// Serial.println(gps.time.minute()); // Minute (0-59) (u8)
 	////Serial.println(gps.time.second()); // Second (0-59) (u8)
 	//Serial.println("#############################");
 
@@ -133,6 +230,10 @@ void loop()
 
 // This custom version of delay() ensures that the gps object
 // is being "fed".
+
+
+
+
 static void smartDelay(unsigned long ms)
 {
 	unsigned long start = millis();
@@ -154,38 +255,41 @@ void InitSim900()
 	delay(20);
 	Serial.println("+++ Sende AT +++");
 	Sim900_Serial.println("AT");
-	delay(900);
+	delay(800);
 	SerialAbfrage();
 	Serial.println("+++ Signal Qualitaet +++ abfragen");
 	Sim900_Serial.println("AT+CSQ"); //Signal quality test, value range is 0-31 , 31 is the best
-	delay(740);
+	delay(800);
 	SerialAbfrage();
 	Serial.println("+++ Sim Karte abfragen +++");
 	Sim900_Serial.println("AT+CCID"); //Read SIM information to confirm whether the SIM is plugged
-	delay(940);
+	delay(800);
 	SerialAbfrage();
 	Serial.println("+++ Check Network +++");
 	Sim900_Serial.println("AT+CREG?"); //Check whether it has registered in the network
-	delay(940);
+	delay(800);
 	SerialAbfrage();
 	Serial.println("+++ set CLIP +++");
 	Sim900_Serial.println("AT+CLIP=1"); //rufnummer anzeige aktivieren CLIP
-	delay(940);
+	delay(800);
 	SerialAbfrage();
 	Sim900_Serial.println("AT+CNMI=2,2,0,0,0");
-	delay(940);
+	delay(800);
 	SerialAbfrage();
 	Serial.println("+++ set SMS mode to text +++");
 	Sim900_Serial.println("AT+CMGF=1"); // set SMS mode to text
-	delay(940);
+	delay(800);
 	SerialAbfrage();
 	Serial.println("+++ sms speicher leeren +++");
 	Sim900_Serial.println("AT+CMGD=1,4"); // delete all SMS
-	delay(940);
+	delay(800);
 	SerialAbfrage();
 	Serial.println("+++ sim900 fertig initialisiert +++");
 	simm900_isINIT = true;
 }
+
+
+
 
 
 
@@ -216,6 +320,32 @@ String SerialAbfrage()
 	return Sim900_Serial.readString();
 
 }
+
+
+
+
+
+
+
+
+
+void DeleteAllSMS()
+{
+	Sim900_Serial.println("AT+CMGD=1,4"); // delete all SMS
+	Serial.println("Alle SMS geloescht void");
+	delay(700);
+	Sim900_Serial.println("AT+CMGF=1");
+	delay(700);
+
+	while (Sim900_Serial.available())
+	{
+		Serial.write(Sim900_Serial.read());//Forward what Software Serial received to Serial Port
+	}
+
+}
+
+
+
 
 static void printFloat(float val, bool valid, int len, int prec)
 {
@@ -285,5 +415,36 @@ static void printStr(const char* str, int len)
 	for (int i = 0; i < len; ++i)
 		Serial.print(i < slen ? str[i] : ' ');
 	smartDelay(0);
+}
+
+
+
+
+
+
+void HeizungEin(bool state, unsigned long shutdownValue)
+{
+	if (state)
+	{
+		// Serial.println("Abschaltzeit: " + shutdownValue);
+		Serial.println("Relay ON");
+		digitalWrite(Relay, HIGH);
+		digitalWrite(EspPinRueck, HIGH);   // Heizung an an ESP8622 melden
+		RelayOn = true;
+		startTime = millis();
+		shutdownTime = shutdownValue;
+
+		// Serial.println(startTime);
+		// Serial.println(shutdownTime);
+		// Serial.println(startTime + shutdownTime);
+	}
+
+	else
+	{
+		Serial.println("Relay OFF");
+		digitalWrite(Relay, LOW);
+		digitalWrite(EspPinRueck, LOW);   // Heizung an an ESP8622 melden
+		RelayOn = false;
+	}
 }
 
