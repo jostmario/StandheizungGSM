@@ -13,7 +13,7 @@ TinyGPSPlus gps;
 #define Sim900_Serial Serial1
 #define GpsNeo6_Serial Serial2
 
-
+bool SmsAntwort = false;                                  // Soll eine Bestätigungsmail gesendet werden (verursacht Kosten)
 static const uint32_t SerialBaud = 115200;              // Baudrate Seraiel  für PC Serial Baud
 static const uint32_t SerialBaudGSM = 19200;             // Baudrate Sim900 Modul
 static const uint32_t SerialBaudGPS = 9600;
@@ -24,10 +24,11 @@ unsigned long startTime;
 unsigned long shutdownTime;
 bool RelayOn;
 String serialInputBufferGSM;
-const unsigned long DEFAULTTIME = 15000;                // Standart Laufzeit der Standheizung 30 Min 1800000ms
+const unsigned long DEFAULTTIME = 1800000;                // Standart Laufzeit der Standheizung 30 Min 1800000ms
 const bool EIN = true;
 const bool AUS = false;
 int val = 0;
+int valoff = 0;
 int HeizLedState = LOW;
 unsigned long previousMillis = 0;                      // LED Blink will store last time LED was updated
 const long interval = 200;                             // LED Blink interval at which to blink Heizungs Led (milliseconds)
@@ -39,6 +40,7 @@ String startzeitM = "MM";
 // Pinbelegungen
 const int Relay = 10;                   // Pin für Rellays Standheizung an         
 const int switchs = 7;                  // Pin für Stanheizung Starttaster
+const int switchsoff = 9;
 const int esppin = 6;                   // Heizung Start
 const int EspPinRueck = 5;              // Rückmeldung an ESPe
 const int HeizungLed = 8;               // Led Standheizung Aktiv
@@ -51,8 +53,12 @@ void sim900_PowerOn();
 // the setup function runs once when you press reset or power the boardd
 void setup()
 {
-	pinMode(switchs, INPUT);            // Taster als Input
+	pinMode(switchs, INPUT_PULLUP);            // Taster als Input
 	digitalWrite(switchs, HIGH);        // Intern Pullup setzen
+	
+	pinMode(switchsoff, INPUT_PULLUP);            // Taster als Input
+	digitalWrite(switchsoff, HIGH);        // Intern Pullup setzen
+
 	pinMode(HeizungLed, OUTPUT);      // Status LED Standheizung
 	pinMode(Relay, OUTPUT);           // Relays als Output
 	digitalWrite(Relay, LOW);         // Relays aus setzen
@@ -60,6 +66,7 @@ void setup()
 
 	//Init der Debug serial.
 	Serial.begin(SerialBaud);
+	Serial.println("+++ SMS Antwort deaktiviert Aktivieren mit SMS komando -->  smson  oder  smsoff  +++");
 
 	//Init der GPS serial.
 	GpsNeo6_Serial.begin(SerialBaudGPS);
@@ -131,10 +138,31 @@ void loop()
 			Serial.println(" +++ Aktiviert durch Taster +++");
 			HeizLedState = HIGH;
 			HeizungEin(EIN, DEFAULTTIME);
+			DeleteAllSMS();      // SMS Speicher leeren
 		}
 
 	}
 	// ++++++++++++++ Per Taster standheizung einschalten Ende++++++++++++++++++++++++++
+	
+	
+
+
+
+
+	valoff = digitalRead(switchsoff);   // read the input pin
+  // Serial.println(valoff);
+	if (valoff == 0)
+	{
+		if (RelayOn)
+		{
+			Serial.println(" +++ Standheizung aus durch Taster +++");
+			HeizLedState = LOW;
+			HeizungEin(AUS, DEFAULTTIME);
+
+		}
+    }
+
+
 
 
 
@@ -152,9 +180,10 @@ void loop()
 		// Ein Anruf kommt rein mit der nummer 491622742063
 		// if (serialInputBufferGSM.substring(8, 12) == "CLIP:\"+491622742063\"")
 		//if (serialInputBufferGSM.substring(8, 14) == "491622")
-		if (serialInputBufferGSM.startsWith("+CLIP"))
+		if (serialInputBufferGSM.startsWith("+clip"))
 		{
-			if (serialInputBufferGSM.substring(8, 21) == "+491622742063")
+			Serial.println("+++ Registrierte Rufnummern:  +491622742063   +4974126950510   +4915903778464 +++");    
+			if (serialInputBufferGSM.substring(8, 21) == "+491622742063" || "+4974126950510" || "+4915903778464" )
 			{
 				Serial.println(serialInputBufferGSM.substring(8, 14));
 				Serial.println("Heizung Einschalten via Telefon");
@@ -198,7 +227,16 @@ void loop()
 
 				Serial.println("startzeit programmiert auf " + startzeitH + " " + startzeitM);
 			}
-
+			else if (serialInputBufferGSM.substring(0, 5) == "smson")
+			{
+				SmsAntwort = true;                                  // Soll eine Bestätigungsmail gesendet werden (verursacht Kosten)
+				Serial.println("+++ AntwortSMS Aktiviert +++");
+			}
+			else if (serialInputBufferGSM.substring(0, 5) == "smsoff")
+			{
+				SmsAntwort = false;                                  // Soll eine Bestätigungsmail gesendet werden (verursacht Kosten)
+				Serial.println("+++ AntwortSMS Deaktiviert +++");
+			}
 	}
 
 
@@ -216,6 +254,7 @@ void loop()
 		{
 			HeizungEin(AUS, 0);
 			digitalWrite(EspPinRueck, LOW);   // Heizung an an ESP8622 melden
+			DeleteAllSMS();      // SMS Speicher leeren
 		}
 	}
 
@@ -475,6 +514,7 @@ void HeizungEin(bool state, unsigned long shutdownValue)
 {
 	if (state)
 		{
+		
 			// Serial.println("Abschaltzeit: " + shutdownValue);
 			Serial.println("Relay ON");
 			digitalWrite(Relay, HIGH);
@@ -482,7 +522,11 @@ void HeizungEin(bool state, unsigned long shutdownValue)
 			RelayOn = true;
 			startTime = millis();
 			shutdownTime = shutdownValue;
-
+				if (SmsAntwort)
+				{
+				smssend();
+				Serial.println("+++ Sende SMS +++");
+				}
 			// Serial.println(startTime);
 			// Serial.println(shutdownTime);
 			// Serial.println(startTime + shutdownTime);
@@ -496,3 +540,17 @@ void HeizungEin(bool state, unsigned long shutdownValue)
 		}
 }
 
+
+
+void smssend() {
+	Sim900_Serial.println("AT+CMGF=1\r");
+	delay(100);
+	Sim900_Serial.println("AT + CMGS = \"+491622742063\"");
+	delay(100);
+	Sim900_Serial.println("Standheizung ON");
+	delay(100);
+	Sim900_Serial.println((char)26);
+	delay(100);
+	Sim900_Serial.println();
+	delay(5000);
+}
