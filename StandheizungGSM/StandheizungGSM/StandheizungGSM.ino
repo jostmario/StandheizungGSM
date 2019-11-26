@@ -7,6 +7,10 @@
 
 #include <TinyGPS++.h>
 #include <Time.h>
+//#include <iostream>
+//#include <string>
+
+//using namespace std;
 
 TinyGPSPlus gps;
 
@@ -24,7 +28,7 @@ unsigned long startTime;
 unsigned long shutdownTime;
 bool RelayOn;
 String serialInputBufferGSM;
-const unsigned long DEFAULTTIME = 1800000;                // Standart Laufzeit der Standheizung 30 Min 1800000ms
+const unsigned long DEFAULTTIME = 5000;                // Standart Laufzeit der Standheizung 30 Min 1800000ms
 const bool EIN = true;
 const bool AUS = false;
 int val = 0;
@@ -35,7 +39,13 @@ const long interval = 200;                             // LED Blink interval at 
 unsigned long currentMilliss = millis();               // LED Blink
 String startzeitH = "HH";
 String startzeitM = "MM";
-
+String aktuelleZeitH;
+String aktuelleZeitM;
+unsigned long TimeDiffInMilli;
+unsigned long TimeToStartInMilli;
+bool isUeberlauf = false;
+bool isUeberlaufRelayOff = false;
+bool isStartzeitAktiv = false;
 
 // Pinbelegungen
 const int Relay = 10;                   // Pin für Rellays Standheizung an         
@@ -49,6 +59,8 @@ const int sim900PowerPin = 6;            // Pin zum Einschalten des Sim900 Modul
 
 void InitSim900();
 void sim900_PowerOn();
+boolean isNumeric(String str);
+unsigned long GetTimeDiff(long _aktuelleZeitH, long _aktuelleZeitM, long _startzeitH, long _startzeitM);
 
 // the setup function runs once when you press reset or power the boardd
 void setup()
@@ -62,7 +74,7 @@ void setup()
 	pinMode(HeizungLed, OUTPUT);      // Status LED Standheizung
 	pinMode(Relay, OUTPUT);           // Relays als Output
 	digitalWrite(Relay, LOW);         // Relays aus setzen
-
+	
 
 	//Init der Debug serial.
 	Serial.begin(SerialBaud);
@@ -125,8 +137,24 @@ void loop()
 		InitSim900();
 		// InitGPSModul();
 	}
-			
 
+	if (isStartzeitAktiv)
+	{
+		if (!RelayOn) 
+		{		
+			if (millis() >= TimeToStartInMilli && !isUeberlauf)
+			{
+				//Serial.println(millis());
+				HeizungEin(EIN, DEFAULTTIME);
+				isStartzeitAktiv = false;
+			}
+
+			if (millis() < 5)
+			{
+				isUeberlauf = false;
+			}
+		}
+	}
 
 	// ++++++++++++++ Per Taster standheizung einschalten Start++++++++++++++++++++++++++
 	val = digitalRead(switchs);   // read the input pin
@@ -144,9 +172,6 @@ void loop()
 	}
 	// ++++++++++++++ Per Taster standheizung einschalten Ende++++++++++++++++++++++++++
 	
-	
-
-
 
 
 	valoff = digitalRead(switchsoff);   // read the input pin
@@ -161,11 +186,6 @@ void loop()
 
 		}
     }
-
-
-
-
-
 
 	if (Sim900_Serial.available())
 	{
@@ -190,6 +210,14 @@ void loop()
 				HeizungEin(EIN, DEFAULTTIME);
 			}
 		}
+		else if (serialInputBufferGSM.startsWith("+cmt"))
+		{
+			aktuelleZeitH = serialInputBufferGSM.substring(35, 37);			
+			aktuelleZeitM = serialInputBufferGSM.substring(38, 40);
+
+			Serial.println("Aktuelle Stunde: " + aktuelleZeitH);
+			Serial.println("Aktuelle Minute: " + aktuelleZeitM);
+		}
 
 
 			//######### SMS Empfang #########
@@ -203,6 +231,9 @@ void loop()
 				HeizungEin(AUS, 0);
 				DeleteAllSMS();
 				Serial.println("Off durch SMS");
+				isStartzeitAktiv = false;
+				isUeberlauf = false;
+				isUeberlaufRelayOff = false;
 			}
 			else if (serialInputBufferGSM.substring(0, 2) == "on")
 			{
@@ -223,19 +254,33 @@ void loop()
 			else if (serialInputBufferGSM.substring(0, 5) == "start")
 			{
 				startzeitH = serialInputBufferGSM.substring(5, 7);
-				startzeitM = serialInputBufferGSM.substring(7, 10);
+				startzeitM = serialInputBufferGSM.substring(7, 9);
+				Serial.println("Startzeit programmiert auf " + startzeitH + " " + startzeitM);
+				TimeDiffInMilli = GetTimeDiff(aktuelleZeitH.toInt(), aktuelleZeitM.toInt(), startzeitH.toInt(), startzeitM.toInt());
+				TimeToStartInMilli = millis() + TimeDiffInMilli;
 
-				Serial.println("startzeit programmiert auf " + startzeitH + " " + startzeitM);
+				Serial.print("Zeitdifferenz in Millisekunden: ");
+				Serial.println(TimeDiffInMilli);
+				Serial.print("Zeit in Millisekunden bis Start: ");
+				Serial.println(TimeToStartInMilli);
+
+				if (millis() > TimeToStartInMilli)
+				{
+					isUeberlauf = true;
+					Serial.println("+++ Millis wird ueberlaufen +++");
+				}
+
+				isStartzeitAktiv = true;				
 			}
 			else if (serialInputBufferGSM.substring(0, 5) == "smson")
 			{
 				SmsAntwort = true;                                  // Soll eine Bestätigungsmail gesendet werden (verursacht Kosten)
-				Serial.println("+++ AntwortSMS Aktiviert +++");
+				Serial.println("+++ AntwortSMS aktiviert +++");
 			}
 			else if (serialInputBufferGSM.substring(0, 5) == "smsoff")
 			{
 				SmsAntwort = false;                                  // Soll eine Bestätigungsmail gesendet werden (verursacht Kosten)
-				Serial.println("+++ AntwortSMS Deaktiviert +++");
+				Serial.println("+++ AntwortSMS deaktiviert +++");
 			}
 	}
 
@@ -250,11 +295,16 @@ void loop()
 	// Relays nach 30 min Abschalten
 	if (RelayOn)
 	{
-		if (startTime + shutdownTime < millis())
+		if (millis() > startTime + shutdownTime && !isUeberlaufRelayOff)
 		{
 			HeizungEin(AUS, 0);
 			digitalWrite(EspPinRueck, LOW);   // Heizung an an ESP8622 melden
 			DeleteAllSMS();      // SMS Speicher leeren
+		}
+
+		if (millis() < 5)
+		{
+			isUeberlaufRelayOff = false;
 		}
 	}
 
@@ -283,9 +333,6 @@ void loop()
 		}
 		else digitalWrite(HeizungLed, LOW);
 	}
-
-
-
 
 
 	// if (GpsNeo6_Serial.available())              // GPS Sensor sendet Daten im Secundentakt raus
@@ -505,9 +552,80 @@ void DeleteAllSMS()
 //	smartDelay(0);
 //}
 
+boolean isNumeric(String str) {
+	unsigned int stringLength = str.length();
+
+	if (stringLength == 0) {
+		return false;
+	}
+
+	boolean seenDecimal = false;
+
+	for (unsigned int i = 0; i < stringLength; ++i) {
+		if (isDigit(str.charAt(i))) {
+			continue;
+		}
+
+		if (str.charAt(i) == '.') {
+			if (seenDecimal) {
+				return false;
+			}
+			seenDecimal = true;
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+unsigned long GetTimeDiff(long _aktuelleZeitH, long _aktuelleZeitM, long _startzeitH, long _startzeitM)
+{
+	long resultHour;
+	long resultMinute;
+	unsigned long resultMilli;
+
+	resultHour = _startzeitH - _aktuelleZeitH;
+	resultMinute = _startzeitM - _aktuelleZeitM;
+	
+	Serial.println("+++++++++ GetTimeDiff: +++++++++");
+	Serial.print("aktuelleZeitH: ");
+	Serial.println(_aktuelleZeitH);
+	Serial.print("aktuelleZeitM: ");
+	Serial.println(_aktuelleZeitM);
+	Serial.print("startzeitH: ");
+	Serial.println(_startzeitH);
+	Serial.print("startzeitM: ");
+	Serial.println(_startzeitM);
 
 
+	if (resultHour < 0)
+	{
+		resultHour = resultHour + 24;
+	}
 
+	if (_aktuelleZeitM > _startzeitM)
+	{
+		resultHour = resultHour - 1;
+	}
+
+	if (resultMinute < 0)
+	{
+		resultMinute = resultMinute + 60;
+	}
+
+
+	resultMilli = resultHour * 3600 * 1000;
+	resultMilli = resultMilli + (resultMinute * 60 * 1000);
+
+	Serial.print("resultHour: ");
+	Serial.println(resultHour);
+	Serial.print("resultMinute: ");
+	Serial.println(resultMinute);
+	Serial.print("resultMilli: ");
+	Serial.println(resultMilli);
+
+	return resultMilli;
+}
 
 
 void HeizungEin(bool state, unsigned long shutdownValue)
@@ -522,11 +640,17 @@ void HeizungEin(bool state, unsigned long shutdownValue)
 			RelayOn = true;
 			startTime = millis();
 			shutdownTime = shutdownValue;
-				if (SmsAntwort)
-				{
+
+			if (millis() > startTime + shutdownTime)
+			{
+				isUeberlaufRelayOff = true;
+			}
+
+			if (SmsAntwort)
+			{
 				smssend();
 				Serial.println("+++ Sende SMS +++");
-				}
+			}
 			// Serial.println(startTime);
 			// Serial.println(shutdownTime);
 			// Serial.println(startTime + shutdownTime);
